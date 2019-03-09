@@ -5,7 +5,6 @@ import (
   "fmt"
   "net"
   "bufio"
-  "strings"
   "time"
 )
 
@@ -47,19 +46,28 @@ func main() {
 
 func handleHttpConnection(conn net.Conn) {
 
-    message, err := bufio.NewReader(conn).ReadString('\n')
+    <-time.NewTimer(1 * time.Second).C
 
-    if err != nil {
+    log("*** Connection established ***")
+
+    scanner := bufio.NewScanner(bufio.NewReader(conn))
+    for scanner.Scan() {
+        line := scanner.Text()
+        fmt.Printf("> %s\n", line)
+        if line == "" {
+            break
+        }
+    }
+
+    if err := scanner.Err(); err != nil {
         log(err.Error())
-         conn.Close()
+        conn.Close()
         return
     }
 
-    <-time.NewTimer(2 * time.Second).C
-
-    log("Message received: " + strings.TrimRight(message, "\n"))
-
     conn.Write([]byte(ResponseOK))
+
+    log("Closing connection")
 
     conn.Close()
 }
