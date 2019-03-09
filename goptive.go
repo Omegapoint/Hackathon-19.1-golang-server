@@ -2,10 +2,12 @@ package main
 
 import (
   "os"
+  "os/signal"
   "fmt"
   "net"
   "bufio"
   "time"
+  "sync"
 )
 
 const ResponseOK string = `HTTP/1.1 200 OK
@@ -21,7 +23,67 @@ Content-Type: text/html; charset=utf-8
 </html>
 `
 
+func dispatcher(listener net.Listener, connections chan net.Conn) {
+    for {
+        log("Dispatcher waiting for next connection...")
+        conn, err := listener.Accept()
+        if err != nil {
+            log(fmt.Sprintf("Dispatcher: %s", err.Error()))
+            return
+        } else {
+            log("Dispatching connection")
+            connections <- conn
+        }
+    }
+}
+
+func worker(id int, connections chan net.Conn, wg *sync.WaitGroup) {
+    for {
+        log(fmt.Sprintf("Worker %d waiting for more jobs...", id))
+        conn, open := <-connections
+        if open {
+            time.Sleep(1*time.Second)
+            log(fmt.Sprintf("*** Worker %d established connection ***", id))
+
+            scanner := bufio.NewScanner(bufio.NewReader(conn))
+            for scanner.Scan() {
+                line := scanner.Text()
+                fmt.Printf("> %s\n", line)
+                if line == "" {
+                    break
+                }
+            }
+
+            if err := scanner.Err(); err != nil {
+                log(fmt.Sprintf("Worker %d encountered a problem: %s", id, err.Error()))
+                conn.Close()
+                continue
+            }
+
+            conn.Write([]byte(ResponseOK))
+
+            log(fmt.Sprintf("Worker %d closing connection", id))
+
+            conn.Close()
+
+        } else {
+            log(fmt.Sprintf("Worker %d exiting", id))
+            break
+        }
+    }
+    wg.Done()
+}
+
+func log(message string) {
+    fmt.Printf("[%s] %s\n", time.Now().Format(time.RFC3339), message)
+}
+
 func main() {
+
+    log("Engines starting up...")
+
+    c := make(chan os.Signal, 1)
+    connections := make(chan net.Conn, 10)
 
     listener, err := net.Listen("tcp", ":1337")
 
@@ -30,48 +92,26 @@ func main() {
         os.Exit(1)
     }
 
+    var wg sync.WaitGroup
+    for i := 0; i < 3; i++ {
+        wg.Add(1)
+        go worker(i, connections, &wg)
+    }
+
+    go dispatcher(listener, connections)
+
     log("=== Goptive server started ===")
 
-    for {
-        log("Waiting for connection...")
-        conn, err := listener.Accept()
-        if err != nil {
-            log(err.Error())
-        } else {
-            log("Handling connection")
-            go handleHttpConnection(conn)
-        }
-    }
-}
+    signal.Notify(c, os.Interrupt)
+    <-c
 
-func handleHttpConnection(conn net.Conn) {
+    log("*** Received interrupt signal ***")
 
-    <-time.NewTimer(1 * time.Second).C
+    listener.Close()
+    close(connections)
 
-    log("*** Connection established ***")
+    log("Waiting for all jobs to finish...")
+    wg.Wait()
 
-    scanner := bufio.NewScanner(bufio.NewReader(conn))
-    for scanner.Scan() {
-        line := scanner.Text()
-        fmt.Printf("> %s\n", line)
-        if line == "" {
-            break
-        }
-    }
-
-    if err := scanner.Err(); err != nil {
-        log(err.Error())
-        conn.Close()
-        return
-    }
-
-    conn.Write([]byte(ResponseOK))
-
-    log("Closing connection")
-
-    conn.Close()
-}
-
-func log(message string) {
-    fmt.Printf("[%s] %s\n", time.Now().Format(time.RFC3339), message)
+    log("=== Goptive server shut down ===")
 }
