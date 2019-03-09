@@ -9,6 +9,19 @@ import (
   "time"
 )
 
+const ResponseOK string = `HTTP/1.1 200 OK
+Server: Goptive
+Content-Type: text/html; charset=utf-8
+
+<html>
+<head>
+<title>Goptive Non-blocking server</title>
+</head>
+<body>
+<h1>Seems OK!</h1>
+</html>
+`
+
 func main() {
 
     listener, err := net.Listen("tcp", ":1337")
@@ -18,44 +31,39 @@ func main() {
         os.Exit(1)
     }
 
-	log("=== Goptive server started ===")
+    log("=== Goptive server started ===")
 
     for {
-		log("Waiting for connection...")
+        log("Waiting for connection...")
         conn, err := listener.Accept()
         if err != nil {
             log(err.Error())
         } else {
-			log("Handling connection")
-            go handleConnection(conn)
+            log("Handling connection")
+            go handleHttpConnection(conn)
         }
     }
 }
 
-func handleConnection(conn net.Conn) {
-	
-	<-time.NewTimer(2 * time.Second).C
+func handleHttpConnection(conn net.Conn) {
 
     message, err := bufio.NewReader(conn).ReadString('\n')
 
     if err != nil {
         log(err.Error())
-		conn.Close()
+         conn.Close()
         return
     }
 
+    <-time.NewTimer(2 * time.Second).C
+
     log("Message received: " + strings.TrimRight(message, "\n"))
 
-    if strings.TrimRight(message, "\n") == "ping" {
-        conn.Write([]byte("pong\n"))
-    } else {
-        conn.Write([]byte("does not compute\n"))
-    }
+    conn.Write([]byte(ResponseOK))
 
-	conn.Close()
+    conn.Close()
 }
 
 func log(message string) {
-	fmt.Printf("[%s] %s\n", time.Now().Format(time.RFC3339), message)
+    fmt.Printf("[%s] %s\n", time.Now().Format(time.RFC3339), message)
 }
-
