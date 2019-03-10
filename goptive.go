@@ -4,6 +4,8 @@ import (
     "os"
     "os/signal"
     "fmt"
+    "strings"
+    "strconv"
     "net"
     "bufio"
     "time"
@@ -28,7 +30,7 @@ func dispatcher(listener net.Listener, connections chan net.Conn) {
         log("Dispatcher waiting for next connection...")
         conn, err := listener.Accept()
         if err != nil {
-            log(fmt.Sprintf("Dispatcher: %s", err.Error()))
+            log("Dispatcher:", err.Error())
             return
         } else {
             log("Dispatching connection")
@@ -39,11 +41,11 @@ func dispatcher(listener net.Listener, connections chan net.Conn) {
 
 func worker(id int, connections chan net.Conn, wg *sync.WaitGroup) {
     for {
-        log(fmt.Sprintf("Worker %d waiting for more jobs...", id))
+        log("Worker", strconv.Itoa(id), "waiting for more jobs...")
         conn, open := <-connections
         if open {
 
-            log(fmt.Sprintf("*** Worker %d established connection ***", id))
+            log("*** Worker", strconv.Itoa(id), "established connection ***")
 
             scanner := bufio.NewScanner(bufio.NewReader(conn))
             for scanner.Scan() {
@@ -55,7 +57,7 @@ func worker(id int, connections chan net.Conn, wg *sync.WaitGroup) {
             }
 
             if err := scanner.Err(); err != nil {
-                log(fmt.Sprintf("Worker %d encountered a problem: %s", id, err.Error()))
+                log("Worker", strconv.Itoa(id), "encountered a problem:", err.Error())
                 conn.Close()
                 continue
             }
@@ -63,20 +65,20 @@ func worker(id int, connections chan net.Conn, wg *sync.WaitGroup) {
             time.Sleep(10*time.Second)
             conn.Write([]byte(ResponseOK))
 
-            log(fmt.Sprintf("Worker %d closing connection", id))
+            log("Worker", strconv.Itoa(id), "closing connection")
 
             conn.Close()
 
         } else {
-            log(fmt.Sprintf("Worker %d exiting", id))
+            log("Worker", strconv.Itoa(id), "exiting")
             break
         }
     }
     wg.Done()
 }
 
-func log(message string) {
-    fmt.Printf("[%s] %s\n", time.Now().Format(time.RFC3339), message)
+func log(message... string) {
+    fmt.Printf("[%s] %s\n", time.Now().Format(time.RFC3339), strings.Join(message, " "))
 }
 
 func main() {
@@ -89,7 +91,7 @@ func main() {
     listener, err := net.Listen("tcp", ":1337")
 
     if err != nil {
-        log(fmt.Sprintf("Failed to open listener: %s", err.Error()))
+        log("Failed to open listener:", err.Error())
         os.Exit(1)
     }
 
