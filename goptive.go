@@ -1,13 +1,13 @@
 package main
 
 import (
-  "os"
-  "os/signal"
-  "fmt"
-  "net"
-  "bufio"
-  "time"
-  "sync"
+    "os"
+    "os/signal"
+    "fmt"
+    "net"
+    "bufio"
+    "time"
+    "sync"
 )
 
 const ResponseOK string = `HTTP/1.1 200 OK
@@ -42,7 +42,7 @@ func worker(id int, connections chan net.Conn, wg *sync.WaitGroup) {
         log(fmt.Sprintf("Worker %d waiting for more jobs...", id))
         conn, open := <-connections
         if open {
-            time.Sleep(1*time.Second)
+
             log(fmt.Sprintf("*** Worker %d established connection ***", id))
 
             scanner := bufio.NewScanner(bufio.NewReader(conn))
@@ -60,6 +60,7 @@ func worker(id int, connections chan net.Conn, wg *sync.WaitGroup) {
                 continue
             }
 
+            time.Sleep(10*time.Second)
             conn.Write([]byte(ResponseOK))
 
             log(fmt.Sprintf("Worker %d closing connection", id))
@@ -88,12 +89,12 @@ func main() {
     listener, err := net.Listen("tcp", ":1337")
 
     if err != nil {
-        log(err.Error())
+        log(fmt.Sprintf("Failed to open listener: %s", err.Error()))
         os.Exit(1)
     }
 
     var wg sync.WaitGroup
-    for i := 0; i < 3; i++ {
+    for i := 0; i < 4; i++ {
         wg.Add(1)
         go worker(i, connections, &wg)
     }
